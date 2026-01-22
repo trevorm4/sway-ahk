@@ -1,0 +1,7 @@
+apps:
+  - app_class: "steam_app_1974050" # Torchlight
+    keys:
+      - key: f
+        interval: 5.0
+      - key: e
+        interval: 7.5
