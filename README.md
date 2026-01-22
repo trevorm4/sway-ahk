@@ -11,11 +11,11 @@ Requires [ydotool](https://github.com/ReimuNotMoe/ydotoo) running in daemon mode
 
 Build application via
 
-`go build main.go -o sway-ahk main.go`
+`go build main.go -o build/sway-key-presser main.go`
 
 Run with
 
-`./sway-ahk -config <path to config>`
+`./build/sway-key-presser -config <path to config>`
 
 Refer to the `config/` directory for an example config.
 
@@ -27,3 +27,9 @@ sleep 2 && swaymsg -t get_tree | jq '.. | select(.type?) | select(.focused==true
 
 and make sure to swap to the window that you are interested in within 2 seconds (or change the sleep duration if necessary)
 
+If you wish to bind it in your sway config, then you would do the following
+
+```
+bindsym $mod+z exec sway-key-presser -config ~/.config/sway/scripts/default.yaml
+```
+where `sway-key-presser` must be in your `$PATH`
