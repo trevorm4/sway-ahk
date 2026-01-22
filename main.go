@@ -26,7 +26,6 @@ const (
 	daemonFlag = "SWAY_AHK_DAEMON"
 )
 
-// --- Configuration Types ---
 
 type KeyAction struct {
 	Key      string  `yaml:"key"`
@@ -54,19 +53,15 @@ var keyCodeMap = map[string]int{
 
 var configFilePath string
 
-// --- Entry Point ---
-
 func main() {
 	flag.StringVar(&configFilePath, "config", "sway-ahk-config.yaml", "Path to configuration file")
 	flag.Parse()
 
-	// 1. Check if we are already the daemonized child
 	if os.Getenv(daemonFlag) == "1" {
 		runDaemon()
 		return
 	}
 
-	// 2. Check if a daemon is already running globally
 	running, pid := getRunningPID()
 	if running {
 		fmt.Printf("Daemon is running (PID %d). Stopping...\n", pid)
@@ -74,12 +69,9 @@ func main() {
 		return
 	}
 
-	// 3. Start the daemon (Fork/Exec)
 	fmt.Println("Starting Sway AHK daemon...")
 	startParent()
 }
-
-// --- Process Management ---
 
 func getRunningPID() (bool, int) {
 	data, err := os.ReadFile(pidFile)
@@ -118,7 +110,7 @@ func startParent() {
 	cmd := exec.Command(os.Args[0], "-config", absConfig)
 	cmd.Env = append(os.Environ(), daemonFlag+"=1")
 
-	// Create new session so it doesn't die with the terminal
+	// Create new session so it doesn't die with the non-daemon proc
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 	}
@@ -127,7 +119,6 @@ func startParent() {
 		log.Fatalf("Failed to start daemon process: %v", err)
 	}
 
-	// Parent writes the PID file for the child
 	var pidOutput []byte
 	err = os.WriteFile(pidFile, fmt.Appendf(pidOutput, "%d", cmd.Process.Pid), 0644)
 	if err != nil {
@@ -138,16 +129,12 @@ func startParent() {
 	os.Exit(0)
 }
 
-// --- Daemon Logic ---
-
 func runDaemon() {
-	// Redirect I/O to /dev/null to fully detach
 	null, _ := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	os.Stdin = null
 	os.Stdout = null
 	os.Stderr = null
 
-	// Setup Logging
 	f, err := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err == nil {
 		log.SetOutput(f)
@@ -202,8 +189,6 @@ func runDaemon() {
 		}
 	}
 }
-
-// --- Helpers (Sway, Config, Keyboard) ---
 
 func monitorSwayFocus(focusChan chan<- string) {
 	cmd := exec.Command("swaymsg", "-t", "subscribe", "-m", `["window"]`)
