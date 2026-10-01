@@ -1,7 +1,6 @@
 apps:
   - app_class: "steam_app_1974050" # Torchlight
-    keys:
-      - key: f
-        interval: 5.0
-      - key: e
-        interval: 7.5
+    remaps:
+      - key: e        # pressing e...
+        to: [q, e] # ...also presses q, w, and e
+        delay: 50     # optional: ms between each mapped key (default 50)

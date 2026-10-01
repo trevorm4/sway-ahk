@@ -26,15 +26,21 @@ const (
 	daemonFlag = "SWAY_AHK_DAEMON"
 )
 
-
 type KeyAction struct {
 	Key      string  `yaml:"key"`
 	Interval float64 `yaml:"interval"`
 }
 
+type RemapAction struct {
+	Key   string   `yaml:"key"`
+	To    []string `yaml:"to"`
+	Delay int      `yaml:"delay"`
+}
+
 type AppConfig struct {
-	AppClass string      `yaml:"app_class"`
-	Keys     []KeyAction `yaml:"keys"`
+	AppClass string        `yaml:"app_class"`
+	Keys     []KeyAction   `yaml:"keys"`
+	Remaps   []RemapAction `yaml:"remaps"`
 }
 
 type Config struct {
@@ -52,6 +58,92 @@ var keyCodeMap = map[string]int{
 }
 
 var configFilePath string
+
+var virtualKeyboard *uinputKeyboard
+
+var keyCodeNames = buildKeyCodeNames()
+
+func buildKeyCodeNames() map[int]string {
+	names := make(map[int]string, len(keyCodeMap))
+	for name, code := range keyCodeMap {
+		names[code] = name
+	}
+	return names
+}
+
+func keyName(code int) string {
+	if name, ok := keyCodeNames[code]; ok {
+		return name
+	}
+	return strconv.Itoa(code)
+}
+
+func keyNames(codes []int) string {
+	parts := make([]string, 0, len(codes))
+	for _, code := range codes {
+		parts = append(parts, keyName(code))
+	}
+	return strings.Join(parts, " ")
+}
+
+const (
+	defaultRemapDelayMs = 50
+	injectedKeyGrace    = 150 * time.Millisecond
+)
+
+type remapManager struct {
+	mu     sync.Mutex
+	remaps map[int]RemapAction
+	recent map[int]time.Time
+}
+
+var remapState = &remapManager{recent: make(map[int]time.Time)}
+
+func (m *remapManager) setRemaps(actions []RemapAction) {
+	built := make(map[int]RemapAction, len(actions))
+	for _, action := range actions {
+		code, ok := keyCodeMap[strings.ToLower(action.Key)]
+		if !ok {
+			log.Printf("remap: unknown key %q, skipping", action.Key)
+			continue
+		}
+		if action.Delay <= 0 {
+			action.Delay = defaultRemapDelayMs
+		}
+		built[code] = action
+	}
+	m.mu.Lock()
+	m.remaps = built
+	m.mu.Unlock()
+}
+
+func (m *remapManager) targetsFor(code int) ([]int, int, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if t, ok := m.recent[code]; ok && time.Since(t) < injectedKeyGrace {
+		return nil, 0, false
+	}
+	action, ok := m.remaps[code]
+	if !ok {
+		return nil, 0, false
+	}
+	targets := make([]int, 0, len(action.To))
+	for _, key := range action.To {
+		target, ok := keyCodeMap[strings.ToLower(key)]
+		if !ok {
+			log.Printf("remap: unknown target key %q, skipping", key)
+			continue
+		}
+		targets = append(targets, target)
+	}
+	return targets, action.Delay, len(targets) > 0
+}
+
+func (m *remapManager) markInjected(code int) {
+	m.mu.Lock()
+	m.recent[code] = time.Now()
+	m.mu.Unlock()
+}
 
 func main() {
 	flag.StringVar(&configFilePath, "config", "sway-ahk-config.yaml", "Path to configuration file")
@@ -152,8 +244,25 @@ func runDaemon() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 
+	vk, err := openUinputKeyboard("sway-ahk")
+	if err != nil {
+		log.Printf("failed to create uinput device (key injection disabled): %v", err)
+	} else {
+		virtualKeyboard = vk
+		defer virtualKeyboard.Close()
+		log.Println("uinput virtual keyboard created")
+	}
+
 	focusChan := make(chan string, 10)
 	go monitorSwayFocus(focusChan)
+
+	if appClass := queryFocusedApp(); appClass != "" {
+		focusChan <- appClass
+	}
+
+	keyChan := make(chan int, 10)
+	go monitorKeyEvents(keyChan)
+	go handleKeyEvents(keyChan)
 
 	var currentCancel context.CancelFunc
 	var wg sync.WaitGroup
@@ -176,7 +285,12 @@ func runDaemon() {
 
 			appConfig := findAppConfig(config, appClass)
 			if appConfig == nil {
+				remapState.setRemaps(nil)
 				continue
+			}
+			remapState.setRemaps(appConfig.Remaps)
+			if len(appConfig.Remaps) > 0 {
+				log.Printf("remaps active for %s (%d)", appClass, len(appConfig.Remaps))
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -228,6 +342,110 @@ func monitorSwayFocus(focusChan chan<- string) {
 	}
 }
 
+type swayNode struct {
+	Focused          bool   `json:"focused"`
+	AppID            string `json:"app_id"`
+	WindowProperties struct {
+		Class string `json:"class"`
+	} `json:"window_properties"`
+	Nodes         []swayNode `json:"nodes"`
+	FloatingNodes []swayNode `json:"floating_nodes"`
+}
+
+func queryFocusedApp() string {
+	out, err := exec.Command("swaymsg", "-t", "get_tree").Output()
+	if err != nil {
+		return ""
+	}
+	var root swayNode
+	if err := json.Unmarshal(out, &root); err != nil {
+		return ""
+	}
+	if name, ok := findFocusedNode(&root); ok {
+		return name
+	}
+	return ""
+}
+
+func findFocusedNode(node *swayNode) (string, bool) {
+	if node.Focused {
+		if node.AppID != "" {
+			return node.AppID, true
+		}
+		if node.WindowProperties.Class != "" {
+			return node.WindowProperties.Class, true
+		}
+		return "", false
+	}
+	for i := range node.Nodes {
+		if name, ok := findFocusedNode(&node.Nodes[i]); ok {
+			return name, true
+		}
+	}
+	for i := range node.FloatingNodes {
+		if name, ok := findFocusedNode(&node.FloatingNodes[i]); ok {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+func monitorKeyEvents(keyChan chan<- int) {
+	cmd := exec.Command("libinput", "debug-events", "--show-keycodes")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("key listener pipe error: %v", err)
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		log.Printf("failed to start libinput debug-events (remaps require the libinput binary and permission to read input devices): %v", err)
+		return
+	}
+	log.Println("key listener started")
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		if code, ok := parseKeyPressed(scanner.Text()); ok {
+			keyChan <- code
+		}
+	}
+}
+
+func parseKeyPressed(line string) (int, bool) {
+	if !strings.Contains(line, "KEYBOARD_KEY") {
+		return 0, false
+	}
+	fields := strings.Fields(line)
+	if len(fields) < 2 || fields[len(fields)-1] != "pressed" {
+		return 0, false
+	}
+	for _, field := range fields {
+		if len(field) > 2 && field[0] == '(' && field[len(field)-1] == ')' {
+			if code, err := strconv.Atoi(field[1 : len(field)-1]); err == nil {
+				return code, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func handleKeyEvents(keyChan <-chan int) {
+	for code := range keyChan {
+		targets, delayMs, ok := remapState.targetsFor(code)
+		if !ok {
+			continue
+		}
+		log.Printf("remap: %s -> %s", keyName(code), keyNames(targets))
+		for i, target := range targets {
+			remapState.markInjected(target)
+			pressKeyOnce(target)
+			if i < len(targets)-1 {
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
+			}
+		}
+	}
+}
+
 func pressKeyPeriodically(ctx context.Context, wg *sync.WaitGroup, action KeyAction) {
 	defer wg.Done()
 	code, ok := keyCodeMap[strings.ToLower(action.Key)]
@@ -243,9 +461,17 @@ func pressKeyPeriodically(ctx context.Context, wg *sync.WaitGroup, action KeyAct
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// ydotool press (1) and release (0)
-			exec.Command("ydotool", "key", fmt.Sprintf("%d:1", code), fmt.Sprintf("%d:0", code)).Run()
+			pressKeyOnce(code)
 		}
+	}
+}
+
+func pressKeyOnce(code int) {
+	if virtualKeyboard == nil {
+		return
+	}
+	if err := virtualKeyboard.TapKey(code); err != nil {
+		log.Printf("uinput key tap failed: %v", err)
 	}
 }
 
