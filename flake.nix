@@ -17,7 +17,7 @@
           vendorHash = "sha256-olypJE9mZCMjnpzu5yx7dtrAEYrKbgI0CURHi+TtUjQ=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
           postInstall = ''
-            wrapProgram $out/bin/sway-ahk --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.libinput ]}
+            wrapProgram $out/bin/sway-ahk --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.libinput pkgs.libnotify ]}
           '';
         };
         default = sway-ahk;

@@ -1,4 +1,7 @@
 pause_key: "p" # optional: global pause toggle
+notifications:  # optional: notify on pause/resume
+  system: true  # system notification via notify-send
+#   sound: "/path/to/sound.wav" # played via pw-play, paplay, ffplay, or mpv
 apps:
   - app_class: "steam_app_1974050" # Torchlight
     # pause_key: "f9" # optional: pause toggle while this app is focused (overrides global)

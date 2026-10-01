@@ -86,6 +86,14 @@ Notes:
 - Pause state persists while the daemon runs, including across focus changes.
 - The pause key press still goes through to the application, so pick a key that is harmless in game. Avoid using the pause key as a remap target.
 
+Pause toggles can be announced via a system notification and/or a sound:
+
+```yaml
+notifications:
+  system: true                    # optional: notify-send on pause/resume
+  sound: "/path/to/sound.wav"      # optional: played via pw-play, paplay, ffplay, or mpv
+```
+
 
 ## Development
 

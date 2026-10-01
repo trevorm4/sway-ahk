@@ -52,4 +52,5 @@ func logPause(paused bool, scope string) {
 	} else {
 		log.Printf("resumed %s", scope)
 	}
+	notifyPauseState(paused, scope)
 }

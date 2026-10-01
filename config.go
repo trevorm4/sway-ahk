@@ -27,9 +27,15 @@ type AppConfig struct {
 	Remaps   []RemapAction `yaml:"remaps"`
 }
 
+type NotifyConfig struct {
+	System bool   `yaml:"system"`
+	Sound  string `yaml:"sound"`
+}
+
 type Config struct {
-	PauseKey string      `yaml:"pause_key"`
-	Apps     []AppConfig `yaml:"apps"`
+	PauseKey      string       `yaml:"pause_key"`
+	Notifications NotifyConfig `yaml:"notifications"`
+	Apps          []AppConfig  `yaml:"apps"`
 }
 
 func loadConfig() (*Config, error) {

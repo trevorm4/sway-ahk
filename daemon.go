@@ -72,7 +72,3 @@ func startParent() {
 	notify("Sway AHK", "Started")
 	os.Exit(0)
 }
-
-func notify(title, message string) {
-	exec.Command("notify-send", title, message).Run()
-}

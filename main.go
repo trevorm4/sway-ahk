@@ -51,6 +51,7 @@ func runDaemon() {
 		return
 	}
 	globalPauseKey := resolveKeyCode(config.PauseKey)
+	notifyConfig = config.Notifications
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
