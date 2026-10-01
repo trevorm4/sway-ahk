@@ -283,10 +283,23 @@ func keyNames(codes []int) string {
 	return strings.Join(parts, " ")
 }
 
+func resolveKeyCode(name string) int {
+	if name == "" {
+		return 0
+	}
+	code, ok := keyCodeMap[strings.ToLower(name)]
+	if !ok {
+		log.Printf("unknown key %q", name)
+		return 0
+	}
+	return code
+}
+
 func pressKeyOnce(code int) {
 	if virtualKeyboard == nil {
 		return
 	}
+	remapState.markInjected(code)
 	if err := virtualKeyboard.TapKey(code); err != nil {
 		log.Printf("uinput key tap failed: %v", err)
 	}
@@ -307,6 +320,9 @@ func pressKeyPeriodically(ctx context.Context, wg *sync.WaitGroup, action KeyAct
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if pauseState.paused() {
+				continue
+			}
 			pressKeyOnce(code)
 		}
 	}

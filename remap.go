@@ -69,6 +69,13 @@ func (m *remapManager) markInjected(code int) {
 	m.mu.Unlock()
 }
 
+func (m *remapManager) recentlyInjected(code int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, ok := m.recent[code]
+	return ok && time.Since(t) < injectedKeyGrace
+}
+
 func monitorKeyEvents(keyChan chan<- int) {
 	cmd := exec.Command("libinput", "debug-events", "--show-keycodes")
 	stdout, err := cmd.StdoutPipe()
@@ -110,13 +117,21 @@ func parseKeyPressed(line string) (int, bool) {
 
 func handleKeyEvents(keyChan <-chan int) {
 	for code := range keyChan {
+		if remapState.recentlyInjected(code) {
+			continue
+		}
+		if pauseState.toggle(code) {
+			continue
+		}
+		if pauseState.paused() {
+			continue
+		}
 		targets, delayMs, ok := remapState.targetsFor(code)
 		if !ok {
 			continue
 		}
 		log.Printf("remap: %s -> %s", keyName(code), keyNames(targets))
 		for i, target := range targets {
-			remapState.markInjected(target)
 			pressKeyOnce(target)
 			if i < len(targets)-1 {
 				time.Sleep(time.Duration(delayMs) * time.Millisecond)

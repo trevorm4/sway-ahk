@@ -68,6 +68,25 @@ Notes:
 - The original key press still goes through to the application; the mapped keys are pressed in addition to it. Remaps only trigger on the initial press, not on key repeat.
 
 
+## Pausing
+
+Interval presses and remaps can be toggled with a pause key, either globally or per app (per-app overrides global):
+
+```yaml
+pause_key: "f9" # optional: toggles everything, works regardless of focused window
+
+apps:
+  - app_class: "steam_app_1974050"
+    pause_key: "p" # optional: toggles this app only, while it is focused
+```
+
+Notes:
+
+- While paused, remaps don't trigger and interval keys don't press; timers keep running, so unpausing takes effect immediately.
+- Pause state persists while the daemon runs, including across focus changes.
+- The pause key press still goes through to the application, so pick a key that is harmless in game. Avoid using the pause key as a remap target.
+
+
 ## Development
 
 Enter the dev shell with `nix develop`, then build with `go build` or via `nix build .#sway-ahk`.

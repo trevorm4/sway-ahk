@@ -22,12 +22,14 @@ type RemapAction struct {
 
 type AppConfig struct {
 	AppClass string        `yaml:"app_class"`
+	PauseKey string        `yaml:"pause_key"`
 	Keys     []KeyAction   `yaml:"keys"`
 	Remaps   []RemapAction `yaml:"remaps"`
 }
 
 type Config struct {
-	Apps []AppConfig `yaml:"apps"`
+	PauseKey string      `yaml:"pause_key"`
+	Apps     []AppConfig `yaml:"apps"`
 }
 
 func loadConfig() (*Config, error) {

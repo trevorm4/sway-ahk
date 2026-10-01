@@ -50,6 +50,7 @@ func runDaemon() {
 		os.Remove(pidFile)
 		return
 	}
+	globalPauseKey := resolveKeyCode(config.PauseKey)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
@@ -96,12 +97,19 @@ func runDaemon() {
 			appConfig := findAppConfig(config, appClass)
 			if appConfig == nil {
 				remapState.setRemaps(nil)
+				pauseState.setActive(appClass, globalPauseKey, false)
 				continue
 			}
 			remapState.setRemaps(appConfig.Remaps)
 			if len(appConfig.Remaps) > 0 {
 				log.Printf("remaps active for %s (%d)", appClass, len(appConfig.Remaps))
 			}
+
+			pauseKey, appScoped := globalPauseKey, false
+			if key := resolveKeyCode(appConfig.PauseKey); key != 0 {
+				pauseKey, appScoped = key, true
+			}
+			pauseState.setActive(appClass, pauseKey, appScoped)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			currentCancel = cancel

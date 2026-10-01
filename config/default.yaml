@@ -1,5 +1,7 @@
+pause_key: "p" # optional: global pause toggle
 apps:
   - app_class: "steam_app_1974050" # Torchlight
+    # pause_key: "f9" # optional: pause toggle while this app is focused (overrides global)
     remaps:
       - key: e        # pressing e...
         to: [q, e] # ...also presses q, w, and e
