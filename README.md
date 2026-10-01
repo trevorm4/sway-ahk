@@ -22,13 +22,15 @@ then re-login for the group change to take effect.
 
 Build application via
 
-`go build main.go -o build/sway-ahk main.go`
+`go build -o build/sway-ahk .`
 
 Run with
 
 `./build/sway-ahk -config <path to config>`
 
 Refer to the `config/` directory for an example config.
+
+Key names are the Linux key codes (`KEY_*` from `input-event-codes.h`) without the `KEY_` prefix, lowercase — e.g. `q`, `f1`, `leftshift`, `kpenter`, `space`.
 
 If you need help finding the class of your window, use the following command
 

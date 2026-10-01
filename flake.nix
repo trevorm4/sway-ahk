@@ -14,7 +14,7 @@
           pname = "sway-ahk";
           version = "0.1.0";
           src = self;
-          vendorHash = "sha256-g+yaVIx4jxpAQ/+WrGKxhVeliYx7nLQe/zsGpxV4Fn4=";
+          vendorHash = "sha256-olypJE9mZCMjnpzu5yx7dtrAEYrKbgI0CURHi+TtUjQ=";
           nativeBuildInputs = [ pkgs.makeWrapper ];
           postInstall = ''
             wrapProgram $out/bin/sway-ahk --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.libinput ]}
