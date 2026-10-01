@@ -98,3 +98,29 @@ notifications:
 ## Development
 
 Enter the dev shell with `nix develop`, then build with `go build` or via `nix build .#sway-ahk`.
+
+
+## Systemd service
+
+The flake exposes a NixOS module (`nixosModules.default`) that runs the daemon as a systemd user service, started with `graphical-session.target`:
+
+```nix
+# flake input
+sway-ahk = {
+  url = "git+file:/home/trevor/Repos/sway-ahk";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+
+# in your NixOS config
+nixpkgs.overlays = [
+  (final: prev: { sway-ahk = inputs.sway-ahk.packages.${final.system}.default; })
+];
+services.sway-ahk = {
+  enable = true;
+  configFile = "/home/trevor/Repos/sway-ahk/config/default.yaml";
+};
+```
+
+Manage it with `systemctl --user start|stop|restart sway-ahk` (restart after config changes). The unit provides its own PATH (`swaymsg`, `pw-play`, `notify-send`), and logs still go to `/tmp/sway-ahk.log`. When running under systemd, prefer `systemctl` over the manual toggle command — the daemon writes the PID file itself, so the toggle will stop the service's daemon rather than start a second one.
+
+Note: user services inherit the supplementary groups of the systemd **user manager**, which are fixed when it starts — not your login groups. If remaps don't trigger under the service after adding yourself to the `input` group, the user manager is stale: fully log out of all sessions, reboot, or `sudo systemctl restart user@1000.service` to pick up the group.

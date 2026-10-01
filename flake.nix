@@ -32,5 +32,10 @@
           ];
         };
       });
+
+      nixosModules = {
+        default = import ./module.nix;
+        sway-ahk = import ./module.nix;
+      };
     };
 }

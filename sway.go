@@ -3,17 +3,28 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"log"
 	"os/exec"
+	"time"
 )
 
 func monitorSwayFocus(focusChan chan<- string) {
+	for {
+		if err := subscribeSwayFocus(focusChan); err != nil {
+			log.Printf("sway focus monitor: %v, retrying in 5s", err)
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func subscribeSwayFocus(focusChan chan<- string) error {
 	cmd := exec.Command("swaymsg", "-t", "subscribe", "-m", `["window"]`)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return
+		return err
 	}
 	if err := cmd.Start(); err != nil {
-		return
+		return err
 	}
 
 	scanner := bufio.NewScanner(stdout)
@@ -42,6 +53,7 @@ func monitorSwayFocus(focusChan chan<- string) {
 			}
 		}
 	}
+	return cmd.Wait()
 }
 
 type swayNode struct {

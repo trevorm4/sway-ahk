@@ -43,6 +43,9 @@ func runDaemon() {
 		defer f.Close()
 	}
 	log.Printf("Daemon initialized (PID: %d)", os.Getpid())
+	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+		log.Printf("failed to write PID file: %v", err)
+	}
 
 	config, err := loadConfig()
 	if err != nil {

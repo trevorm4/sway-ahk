@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os/exec"
 	"strconv"
@@ -77,15 +78,22 @@ func (m *remapManager) recentlyInjected(code int) bool {
 }
 
 func monitorKeyEvents(keyChan chan<- int) {
+	for {
+		if err := subscribeKeyEvents(keyChan); err != nil {
+			log.Printf("key listener: %v, retrying in 5s", err)
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func subscribeKeyEvents(keyChan chan<- int) error {
 	cmd := exec.Command("libinput", "debug-events", "--show-keycodes")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("key listener pipe error: %v", err)
-		return
+		return err
 	}
 	if err := cmd.Start(); err != nil {
-		log.Printf("failed to start libinput debug-events (remaps require the libinput binary and permission to read input devices): %v", err)
-		return
+		return fmt.Errorf("libinput debug-events (remaps require the libinput binary and permission to read input devices): %w", err)
 	}
 	log.Println("key listener started")
 
@@ -95,6 +103,7 @@ func monitorKeyEvents(keyChan chan<- int) {
 			keyChan <- code
 		}
 	}
+	return cmd.Wait()
 }
 
 func parseKeyPressed(line string) (int, bool) {
