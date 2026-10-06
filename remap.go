@@ -77,7 +77,13 @@ func (m *remapManager) recentlyInjected(code int) bool {
 	return ok && time.Since(t) < injectedKeyGrace
 }
 
-func monitorKeyEvents(keyChan chan<- int) {
+type keyEvent struct {
+	code    int
+	pressed bool
+	device  string
+}
+
+func monitorKeyEvents(keyChan chan<- keyEvent) {
 	for {
 		if err := subscribeKeyEvents(keyChan); err != nil {
 			log.Printf("key listener: %v, retrying in 5s", err)
@@ -86,7 +92,7 @@ func monitorKeyEvents(keyChan chan<- int) {
 	}
 }
 
-func subscribeKeyEvents(keyChan chan<- int) error {
+func subscribeKeyEvents(keyChan chan<- keyEvent) error {
 	cmd := exec.Command("libinput", "debug-events", "--show-keycodes")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -99,47 +105,70 @@ func subscribeKeyEvents(keyChan chan<- int) error {
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
-		if code, ok := parseKeyPressed(scanner.Text()); ok {
-			keyChan <- code
+		if ev, ok := parseKeyEvent(scanner.Text()); ok {
+			keyChan <- ev
 		}
 	}
 	return cmd.Wait()
 }
 
-func parseKeyPressed(line string) (int, bool) {
+func parseKeyEvent(line string) (keyEvent, bool) {
 	if !strings.Contains(line, "KEYBOARD_KEY") {
-		return 0, false
+		return keyEvent{}, false
 	}
 	fields := strings.Fields(line)
-	if len(fields) < 2 || fields[len(fields)-1] != "pressed" {
-		return 0, false
+	if len(fields) < 2 {
+		return keyEvent{}, false
+	}
+	ev := keyEvent{device: strings.TrimPrefix(fields[0], "-")}
+	switch fields[len(fields)-1] {
+	case "pressed":
+		ev.pressed = true
+	case "released":
+		ev.pressed = false
+	default:
+		return keyEvent{}, false
 	}
 	for _, field := range fields {
 		if len(field) > 2 && field[0] == '(' && field[len(field)-1] == ')' {
 			if code, err := strconv.Atoi(field[1 : len(field)-1]); err == nil {
-				return code, true
+				ev.code = code
+				return ev, true
 			}
 		}
 	}
-	return 0, false
+	return keyEvent{}, false
 }
 
-func handleKeyEvents(keyChan <-chan int) {
-	for code := range keyChan {
-		if remapState.recentlyInjected(code) {
+func isOwnEvent(ev keyEvent) bool {
+	if ownEventTag != "" {
+		return ev.device == ownEventTag
+	}
+	return remapState.recentlyInjected(ev.code)
+}
+
+func handleKeyEvents(keyChan <-chan keyEvent) {
+	for ev := range keyChan {
+		if isOwnEvent(ev) {
 			continue
 		}
-		if pauseState.toggle(code) {
+		if !ev.pressed {
+			if holdState.isHeld(ev.code) {
+				holdState.notifyReassert(ev.code)
+			}
+			continue
+		}
+		if pauseState.toggle(ev.code) {
 			continue
 		}
 		if pauseState.paused() {
 			continue
 		}
-		targets, delayMs, ok := remapState.targetsFor(code)
+		targets, delayMs, ok := remapState.targetsFor(ev.code)
 		if !ok {
 			continue
 		}
-		log.Printf("remap: %s -> %s", keyName(code), keyNames(targets))
+		log.Printf("remap: %s -> %s", keyName(ev.code), keyNames(targets))
 		for i, target := range targets {
 			pressKeyOnce(target)
 			if i < len(targets)-1 {

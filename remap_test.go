@@ -5,29 +5,52 @@ import (
 	"time"
 )
 
-func TestParseKeyPressed(t *testing.T) {
+func TestParseKeyEvent(t *testing.T) {
 	tests := []struct {
-		name string
-		line string
-		code int
-		ok   bool
+		name    string
+		line    string
+		code    int
+		pressed bool
+		device  string
+		ok      bool
 	}{
-		{"press", "-event18  KEYBOARD_KEY     +2.36s  KEY_E (18) pressed", 18, true},
-		{"release ignored", "-event18  KEYBOARD_KEY     +2.42s  KEY_E (18) released", 0, false},
-		{"pointer button ignored", "-event6   POINTER_BUTTON    +1.20s  BTN_LEFT (272) pressed", 0, false},
-		{"device added ignored", "-event6   DEVICE_ADDED      Power Button      seat0 default cap:d", 0, false},
-		{"no keycode", "-event18  KEYBOARD_KEY     +2.36s  pressed", 0, false},
-		{"garbage", "not an event line", 0, false},
-		{"empty", "", 0, false},
+		{"press", "-event18  KEYBOARD_KEY     +2.36s  KEY_E (18) pressed", 18, true, "event18", true},
+		{"release", "event19  KEYBOARD_KEY     +2.42s  KEY_E (18) released", 18, false, "event19", true},
+		{"pointer button ignored", "-event6   POINTER_BUTTON    +1.20s  BTN_LEFT (272) pressed", 0, false, "", false},
+		{"device added ignored", "-event6   DEVICE_ADDED      Power Button      seat0 default cap:d", 0, false, "", false},
+		{"no keycode", "-event18  KEYBOARD_KEY     +2.36s  pressed", 0, false, "", false},
+		{"garbage", "not an event line", 0, false, "", false},
+		{"empty", "", 0, false, "", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			code, ok := parseKeyPressed(tt.line)
-			if ok != tt.ok || code != tt.code {
-				t.Errorf("parseKeyPressed(%q) = (%d, %v), want (%d, %v)", tt.line, code, ok, tt.code, tt.ok)
+			ev, ok := parseKeyEvent(tt.line)
+			if ok != tt.ok || ev.code != tt.code || ev.pressed != tt.pressed || ev.device != tt.device {
+				t.Errorf("parseKeyEvent(%q) = (%+v, %v), want (code=%d, pressed=%v, device=%q, ok=%v)",
+					tt.line, ev, ok, tt.code, tt.pressed, tt.device, tt.ok)
 			}
 		})
+	}
+}
+
+func TestIsOwnEvent(t *testing.T) {
+	savedTag := ownEventTag
+	defer func() { ownEventTag = savedTag }()
+
+	ownEventTag = "event19"
+	if !isOwnEvent(keyEvent{device: "event19", code: 18}) {
+		t.Error("events from our own device should be filtered")
+	}
+	if isOwnEvent(keyEvent{device: "event4", code: 18}) {
+		t.Error("events from other devices should not be filtered")
+	}
+
+	ownEventTag = ""
+	clearInjectedMarks()
+	remapState.markInjected(keyCodeMap["w"])
+	if !isOwnEvent(keyEvent{device: "event4", code: keyCodeMap["w"]}) {
+		t.Error("time-based fallback should filter recently injected keys")
 	}
 }
 

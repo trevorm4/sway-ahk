@@ -48,6 +48,35 @@ bindsym $mod+z exec sway-ahk -config ~/.config/sway/scripts/default.yaml
 where `sway-ahk` must be in your `$PATH`
 
 
+## Hold keys
+
+Instead of tapping a key at an interval, a key can be held down continuously while the app is focused:
+
+```yaml
+apps:
+  - app_class: "my_game"
+    keys:
+      - key: w
+        hold: true     # w is held down while this app is focused
+        delay: 100     # optional: ms to wait after this key goes down before the next hold starts
+      - key: e
+        hold: true
+      - key: f
+        interval: 5.0  # f is tapped every 5 seconds
+```
+
+Hold keys go down in config order, and keep that order when pausing and resuming. Held keys are released when the app loses focus, when the daemon stops, and while paused — pressing the pause key toggles them down/up along with everything else. Use `delay` to space out the key-downs for games that sample key state once per frame instead of processing key events.
+
+For XWayland games, a key-up from *any* device releases that key globally — so physically pressing a held key (or having it as a remap target) breaks the hold even though the virtual keyboard still holds it down. The daemon watches for that and automatically re-presses held keys released elsewhere (logged as `hold: <key> re-asserted (released elsewhere)`). If a game still loses held keys (some clear key state internally on focus hiccups), set `reassert` to re-press the key every N milliseconds:
+
+```yaml
+    keys:
+      - key: w
+        hold: true
+        reassert: 250   # optional: re-press w every 250ms; only use for keys where repeated presses are harmless (e.g. movement)
+```
+
+
 ## Remaps
 
 A single key press can be mapped to multiple key presses for the focused app using `remaps`:

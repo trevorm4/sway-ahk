@@ -12,6 +12,9 @@ var configFilePath string
 type KeyAction struct {
 	Key      string  `yaml:"key"`
 	Interval float64 `yaml:"interval"`
+	Hold     bool    `yaml:"hold"`
+	Delay    int     `yaml:"delay"`
+	Reassert int     `yaml:"reassert"`
 }
 
 type RemapAction struct {

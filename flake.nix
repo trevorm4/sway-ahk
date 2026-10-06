@@ -28,7 +28,7 @@
           packages = with pkgs; [
             go
             gopls
-            libinput
+            libinput.bin
           ];
         };
       });

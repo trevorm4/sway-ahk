@@ -64,8 +64,13 @@ func runDaemon() {
 		log.Printf("failed to create uinput device (key injection disabled): %v", err)
 	} else {
 		virtualKeyboard = vk
-		defer virtualKeyboard.Close()
-		log.Println("uinput virtual keyboard created")
+		ownEventTag = vk.EventTag()
+		defer vk.Close()
+		if ownEventTag != "" {
+			log.Printf("uinput virtual keyboard created (%s)", ownEventTag)
+		} else {
+			log.Println("uinput virtual keyboard created")
+		}
 	}
 
 	focusChan := make(chan string, 10)
@@ -75,12 +80,13 @@ func runDaemon() {
 		focusChan <- appClass
 	}
 
-	keyChan := make(chan int, 10)
+	keyChan := make(chan keyEvent, 10)
 	go monitorKeyEvents(keyChan)
 	go handleKeyEvents(keyChan)
 
 	var currentCancel context.CancelFunc
 	var wg sync.WaitGroup
+	activeClass := ""
 
 	for {
 		select {
@@ -93,6 +99,13 @@ func runDaemon() {
 			return
 
 		case appClass := <-focusChan:
+			if appClass == activeClass {
+				log.Printf("focus: %s (unchanged)", appClass)
+				continue
+			}
+			log.Printf("focus: %s", appClass)
+			activeClass = appClass
+
 			if currentCancel != nil {
 				currentCancel()
 				wg.Wait()
@@ -118,7 +131,21 @@ func runDaemon() {
 			ctx, cancel := context.WithCancel(context.Background())
 			currentCancel = cancel
 
+			holdCount := 0
 			for _, action := range appConfig.Keys {
+				if action.Hold {
+					holdCount++
+				}
+			}
+			if holdCount > 0 {
+				log.Printf("holds active for %s (%d)", appClass, holdCount)
+				wg.Add(1)
+				go monitorHolds(ctx, &wg, appConfig.Keys)
+			}
+			for _, action := range appConfig.Keys {
+				if action.Hold {
+					continue
+				}
 				wg.Add(1)
 				go pressKeyPeriodically(ctx, &wg, action)
 			}
