@@ -2,125 +2,95 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
-	"syscall"
-	"unsafe"
+
+	"github.com/bendahl/uinput"
 )
 
 const (
-	uinputPath = "/dev/uinput"
-
-	uiSetEvBit  = 0x40045564 // _IOW('U', 100, int)
-	uiSetKeyBit = 0x40045565 // _IOW('U', 101, int)
-	uiDevCreate = 0x5501     // _IO('U', 1)
-
-	evSyn     = 0x00
-	evKey     = 0x01
-	synReport = 0x00
+	uinputPath    = "/dev/uinput"
+	sysfsInputDir = "/sys/devices/virtual/input"
 )
 
-type inputEvent struct {
-	Sec   int64
-	Usec  int64
-	Type  uint16
-	Code  uint16
-	Value int32
-}
-
-type uinputID struct {
-	BusType uint16
-	Vendor  uint16
-	Product uint16
-	Version uint16
-}
-
-type uinputUserDev struct {
-	Name         [80]byte
-	ID           uinputID
-	FFEffectsMax int32
-	AbsMax       [64]int32
-	AbsMin       [64]int32
-	AbsFuzz      [64]int32
-	AbsFlat      [64]int32
-}
-
 type uinputKeyboard struct {
-	mu sync.Mutex
-	fd int
+	mu       sync.Mutex
+	kb       uinput.Keyboard
+	eventTag string
 }
 
 func openUinputKeyboard(name string) (*uinputKeyboard, error) {
-	fd, err := syscall.Open(uinputPath, syscall.O_WRONLY, 0)
+	kb, err := uinput.CreateKeyboard(uinputPath, []byte(name))
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", uinputPath, err)
+		return nil, fmt.Errorf("create keyboard on %s: %w", uinputPath, err)
 	}
+	tag, tagErr := findEventTag(name)
+	if tagErr != nil {
+		log.Printf("uinput: %v (own-event filtering falls back to time-based guard)", tagErr)
+	}
+	return &uinputKeyboard{kb: kb, eventTag: tag}, nil
+}
 
-	kb := &uinputKeyboard{fd: fd}
+func (k *uinputKeyboard) EventTag() string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.eventTag
+}
 
-	fail := func(step string, err error) (*uinputKeyboard, error) {
-		syscall.Close(fd)
-		return nil, fmt.Errorf("%s: %w", step, err)
+func findEventTag(name string) (string, error) {
+	entries, err := os.ReadDir(sysfsInputDir)
+	if err != nil {
+		return "", err
 	}
-
-	if err := ioctlInt(fd, uiSetEvBit, evSyn); err != nil {
-		return fail("set ev_syn bit", err)
-	}
-	if err := ioctlInt(fd, uiSetEvBit, evKey); err != nil {
-		return fail("set ev_key bit", err)
-	}
-	for _, code := range keyCodeMap {
-		if err := ioctlInt(fd, uiSetKeyBit, int32(code)); err != nil {
-			return fail(fmt.Sprintf("set key bit %d", code), err)
+	tag := ""
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), "input") {
+			continue
+		}
+		dir := filepath.Join(sysfsInputDir, entry.Name())
+		data, err := os.ReadFile(filepath.Join(dir, "name"))
+		if err != nil || strings.TrimSpace(string(data)) != name {
+			continue
+		}
+		sub, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, node := range sub {
+			if strings.HasPrefix(node.Name(), "event") {
+				tag = node.Name()
+			}
 		}
 	}
-
-	dev := uinputUserDev{ID: uinputID{BusType: 0x03, Vendor: 0x1234, Product: 0x5678, Version: 1}}
-	copy(dev.Name[:], name)
-	if _, err := syscall.Write(fd, (*[unsafe.Sizeof(dev)]byte)(unsafe.Pointer(&dev))[:]); err != nil {
-		return fail("write device info", err)
+	if tag == "" {
+		return "", fmt.Errorf("no sysfs event node found for %q", name)
 	}
-
-	if err := ioctl(fd, uiDevCreate, 0); err != nil {
-		return fail("create device", err)
-	}
-	return kb, nil
+	return tag, nil
 }
 
 func (k *uinputKeyboard) TapKey(code int) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	if err := k.emit(evKey, uint16(code), 1); err != nil {
-		return err
-	}
-	if err := k.emit(evSyn, synReport, 0); err != nil {
-		return err
-	}
-	if err := k.emit(evKey, uint16(code), 0); err != nil {
-		return err
-	}
-	return k.emit(evSyn, synReport, 0)
+	return k.kb.KeyPress(code)
+}
+
+func (k *uinputKeyboard) PressKey(code int) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.kb.KeyDown(code)
+}
+
+func (k *uinputKeyboard) ReleaseKey(code int) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.kb.KeyUp(code)
 }
 
 func (k *uinputKeyboard) Close() error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	return syscall.Close(k.fd)
-}
-
-func (k *uinputKeyboard) emit(evType, code uint16, value int32) error {
-	e := inputEvent{Type: evType, Code: code, Value: value}
-	_, err := syscall.Write(k.fd, (*[unsafe.Sizeof(e)]byte)(unsafe.Pointer(&e))[:])
-	return err
-}
-
-func ioctl(fd int, req uintptr, arg uintptr) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), req, arg)
-	if errno != 0 {
-		return errno
-	}
-	return nil
-}
-
-func ioctlInt(fd int, req uintptr, value int32) error {
-	return ioctl(fd, req, uintptr(value))
+	return k.kb.Close()
 }

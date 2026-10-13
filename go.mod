@@ -3,3 +3,5 @@ module github.com/trevorm4/sway-ahk
 go 1.25.5
 
 require gopkg.in/yaml.v3 v3.0.1
+
+require github.com/bendahl/uinput v1.7.0 // indirect

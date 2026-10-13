@@ -1,5 +1,18 @@
+notifications:  # optional: notify on pause/resume
+  system: true  # system notification via notify-send
+#   sound: "/path/to/sound.wav" # played via pw-play, paplay, ffplay, or mpv
 apps:
-  - app_class: "steam_app_1974050" # Torchlight
+  - app_class: "steam_app_899770" # Last Epoch
+    pause_key: "f9" # optional: pause toggle while this app is focused (overrides global)
+    keys:
+      - key: w
+        hold: true   # optional: hold w down while this app is focused
+        delay: 100   # optional: ms after w goes down before the next hold starts
+        reassert: 250 # optional: re-press w every 250ms (for games that lose held keys)
+      - key: e
+        hold: true
+      - key: r
+        hold: true
     remaps:
       - key: e        # pressing e...
         to: [q, e] # ...also presses q, w, and e
