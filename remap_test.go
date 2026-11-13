@@ -12,23 +12,26 @@ func TestParseKeyEvent(t *testing.T) {
 		code    int
 		pressed bool
 		device  string
+		button  bool
 		ok      bool
 	}{
-		{"press", "-event18  KEYBOARD_KEY     +2.36s  KEY_E (18) pressed", 18, true, "event18", true},
-		{"release", "event19  KEYBOARD_KEY     +2.42s  KEY_E (18) released", 18, false, "event19", true},
-		{"pointer button ignored", "-event6   POINTER_BUTTON    +1.20s  BTN_LEFT (272) pressed", 0, false, "", false},
-		{"device added ignored", "-event6   DEVICE_ADDED      Power Button      seat0 default cap:d", 0, false, "", false},
-		{"no keycode", "-event18  KEYBOARD_KEY     +2.36s  pressed", 0, false, "", false},
-		{"garbage", "not an event line", 0, false, "", false},
-		{"empty", "", 0, false, "", false},
+		{"press", "-event18  KEYBOARD_KEY     +2.36s  KEY_E (18) pressed", 18, true, "event18", false, true},
+		{"release", "event19  KEYBOARD_KEY     +2.42s  KEY_E (18) released", 18, false, "event19", false, true},
+		{"pointer button", "-event6   POINTER_BUTTON    +1.20s  BTN_LEFT (272) pressed", 272, true, "event6", true, true},
+		{"pointer button release", "event6   POINTER_BUTTON    +1.22s  BTN_SIDE (275) released", 275, false, "event6", true, true},
+		{"pointer motion ignored", "-event6   POINTER_MOTION    +1.20s    1.23/  4.56", 0, false, "", false, false},
+		{"device added ignored", "-event6   DEVICE_ADDED      Power Button      seat0 default cap:d", 0, false, "", false, false},
+		{"no keycode", "-event18  KEYBOARD_KEY     +2.36s  pressed", 0, false, "", false, false},
+		{"garbage", "not an event line", 0, false, "", false, false},
+		{"empty", "", 0, false, "", false, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ev, ok := parseKeyEvent(tt.line)
-			if ok != tt.ok || ev.code != tt.code || ev.pressed != tt.pressed || ev.device != tt.device {
-				t.Errorf("parseKeyEvent(%q) = (%+v, %v), want (code=%d, pressed=%v, device=%q, ok=%v)",
-					tt.line, ev, ok, tt.code, tt.pressed, tt.device, tt.ok)
+			if ok != tt.ok || ev.code != tt.code || ev.pressed != tt.pressed || ev.device != tt.device || ev.button != tt.button {
+				t.Errorf("parseKeyEvent(%q) = (%+v, %v), want (code=%d, pressed=%v, device=%q, button=%v, ok=%v)",
+					tt.line, ev, ok, tt.code, tt.pressed, tt.device, tt.button, tt.ok)
 			}
 		})
 	}

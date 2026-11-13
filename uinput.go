@@ -94,3 +94,50 @@ func (k *uinputKeyboard) Close() error {
 	defer k.mu.Unlock()
 	return k.kb.Close()
 }
+
+type uinputMouse struct {
+	mu       sync.Mutex
+	mouse    uinput.Mouse
+	eventTag string
+}
+
+func openUinputMouse(name string) (*uinputMouse, error) {
+	mouse, err := uinput.CreateMouse(uinputPath, []byte(name))
+	if err != nil {
+		return nil, fmt.Errorf("create mouse on %s: %w", uinputPath, err)
+	}
+	tag, tagErr := findEventTag(name)
+	if tagErr != nil {
+		log.Printf("uinput mouse: %v (own-event filtering falls back to time-based guard)", tagErr)
+	}
+	return &uinputMouse{mouse: mouse, eventTag: tag}, nil
+}
+
+func (m *uinputMouse) EventTag() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.eventTag
+}
+
+// ClickButton taps a mouse button. Only left/right/middle are supported by
+// the virtual mouse.
+func (m *uinputMouse) ClickButton(code int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	switch code {
+	case mouseButtonMap["left"]:
+		return m.mouse.LeftClick()
+	case mouseButtonMap["right"]:
+		return m.mouse.RightClick()
+	case mouseButtonMap["middle"]:
+		return m.mouse.MiddleClick()
+	default:
+		return fmt.Errorf("button code %d is not clickable (only left/right/middle)", code)
+	}
+}
+
+func (m *uinputMouse) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.mouse.Close()
+}

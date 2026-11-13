@@ -81,6 +81,7 @@ type keyEvent struct {
 	code    int
 	pressed bool
 	device  string
+	button  bool // true for mouse buttons (POINTER_BUTTON), false for keyboard keys
 }
 
 func monitorKeyEvents(keyChan chan<- keyEvent) {
@@ -113,14 +114,19 @@ func subscribeKeyEvents(keyChan chan<- keyEvent) error {
 }
 
 func parseKeyEvent(line string) (keyEvent, bool) {
-	if !strings.Contains(line, "KEYBOARD_KEY") {
+	button := false
+	switch {
+	case strings.Contains(line, "KEYBOARD_KEY"):
+	case strings.Contains(line, "POINTER_BUTTON"):
+		button = true
+	default:
 		return keyEvent{}, false
 	}
 	fields := strings.Fields(line)
 	if len(fields) < 2 {
 		return keyEvent{}, false
 	}
-	ev := keyEvent{device: strings.TrimPrefix(fields[0], "-")}
+	ev := keyEvent{device: strings.TrimPrefix(fields[0], "-"), button: button}
 	switch fields[len(fields)-1] {
 	case "pressed":
 		ev.pressed = true
@@ -141,8 +147,8 @@ func parseKeyEvent(line string) (keyEvent, bool) {
 }
 
 func isOwnEvent(ev keyEvent) bool {
-	if ownEventTag != "" {
-		return ev.device == ownEventTag
+	if ownEventTag != "" || ownMouseEventTag != "" {
+		return ev.device == ownEventTag || ev.device == ownMouseEventTag
 	}
 	return remapState.recentlyInjected(ev.code)
 }
@@ -152,6 +158,7 @@ func handleKeyEvents(keyChan <-chan keyEvent) {
 		if isOwnEvent(ev) {
 			continue
 		}
+		autoclickState.handleEvent(ev)
 		if !ev.pressed {
 			if holdState.isHeld(ev.code) {
 				holdState.notifyReassert(ev.code)

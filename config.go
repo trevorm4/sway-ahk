@@ -23,11 +23,19 @@ type RemapAction struct {
 	Delay int      `yaml:"delay"`
 }
 
+type AutoclickAction struct {
+	Trigger  string  `yaml:"trigger"`
+	Mode     string  `yaml:"mode"`
+	Button   string  `yaml:"button"`
+	Interval float64 `yaml:"interval"`
+}
+
 type AppConfig struct {
-	AppClass string        `yaml:"app_class"`
-	PauseKey string        `yaml:"pause_key"`
-	Keys     []KeyAction   `yaml:"keys"`
-	Remaps   []RemapAction `yaml:"remaps"`
+	AppClass     string            `yaml:"app_class"`
+	PauseKey     string            `yaml:"pause_key"`
+	Keys         []KeyAction       `yaml:"keys"`
+	Remaps       []RemapAction     `yaml:"remaps"`
+	Autoclickers []AutoclickAction `yaml:"autoclickers"`
 }
 
 type NotifyConfig struct {
@@ -36,9 +44,10 @@ type NotifyConfig struct {
 }
 
 type Config struct {
-	PauseKey      string       `yaml:"pause_key"`
-	Notifications NotifyConfig `yaml:"notifications"`
-	Apps          []AppConfig  `yaml:"apps"`
+	PauseKey      string            `yaml:"pause_key"`
+	Notifications NotifyConfig      `yaml:"notifications"`
+	Autoclickers  []AutoclickAction `yaml:"autoclickers"`
+	Apps          []AppConfig       `yaml:"apps"`
 }
 
 func loadConfig() (*Config, error) {

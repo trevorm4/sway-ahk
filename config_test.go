@@ -12,6 +12,11 @@ pause_key: "f9"
 notifications:
   system: true
   sound: /path/to/sound.wav
+autoclickers:
+  - trigger: mouse_extra
+    mode: hold
+    button: left
+    interval: 0.05
 apps:
   - app_class: "game"
     pause_key: "p"
@@ -37,6 +42,9 @@ apps:
 	}
 	if !c.Notifications.System || c.Notifications.Sound != "/path/to/sound.wav" {
 		t.Errorf("notifications = %+v", c.Notifications)
+	}
+	if len(c.Autoclickers) != 1 || c.Autoclickers[0].Trigger != "mouse_extra" || c.Autoclickers[0].Mode != "hold" {
+		t.Errorf("global autoclickers = %+v", c.Autoclickers)
 	}
 	if len(c.Apps) != 1 || c.Apps[0].AppClass != "game" || c.Apps[0].PauseKey != "p" {
 		t.Errorf("apps = %+v", c.Apps)

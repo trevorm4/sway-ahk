@@ -78,6 +78,10 @@ func runDaemon() {
 		return
 	}
 	globalPauseKey := resolveKeyCode(config.PauseKey)
+	globalAutoclickers := config.Autoclickers
+	if len(globalAutoclickers) > 0 {
+		log.Printf("global autoclickers: %d", len(globalAutoclickers))
+	}
 	notifyConfig = config.Notifications
 
 	sigChan := make(chan os.Signal, 1)
@@ -94,6 +98,20 @@ func runDaemon() {
 			log.Printf("uinput virtual keyboard created (%s)", ownEventTag)
 		} else {
 			log.Println("uinput virtual keyboard created")
+		}
+	}
+
+	vm, err := openUinputMouse("sway-ahk-mouse")
+	if err != nil {
+		log.Printf("failed to create uinput mouse (autoclick disabled): %v", err)
+	} else {
+		virtualMouse = vm
+		ownMouseEventTag = vm.EventTag()
+		defer vm.Close()
+		if ownMouseEventTag != "" {
+			log.Printf("uinput virtual mouse created (%s)", ownMouseEventTag)
+		} else {
+			log.Println("uinput virtual mouse created")
 		}
 	}
 
@@ -138,10 +156,20 @@ func runDaemon() {
 			appConfig := findAppConfig(config, appClass)
 			if appConfig == nil {
 				remapState.setRemaps(nil)
+				autoclickState.arm(globalAutoclickers)
 				pauseState.setActive(appClass, globalPauseKey, false)
 				continue
 			}
 			remapState.setRemaps(appConfig.Remaps)
+			// Global autoclickers apply everywhere; per-app ones add to (and
+			// override, by trigger) them while this app is focused.
+			combined := make([]AutoclickAction, 0, len(globalAutoclickers)+len(appConfig.Autoclickers))
+			combined = append(combined, globalAutoclickers...)
+			combined = append(combined, appConfig.Autoclickers...)
+			autoclickState.arm(combined)
+			if len(appConfig.Autoclickers) > 0 {
+				log.Printf("autoclickers active for %s (%d)", appClass, len(appConfig.Autoclickers))
+			}
 			if len(appConfig.Remaps) > 0 {
 				log.Printf("remaps active for %s (%d)", appClass, len(appConfig.Remaps))
 			}

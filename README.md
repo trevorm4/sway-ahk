@@ -109,6 +109,38 @@ Notes:
 - The original key press still goes through to the application; the mapped keys are pressed in addition to it. Remaps only trigger on the initial press, not on key repeat.
 
 
+## Autoclickers
+
+A trigger can turn a mouse button into an autoclicker, either for a specific app or system-wide:
+
+```yaml
+autoclickers:               # optional: active regardless of focused window
+  - trigger: "mouse_extra"  # front side mouse button
+    mode: "hold"
+    button: "left"
+    interval: 0.05
+
+apps:
+  - app_class: "my_game"
+    autoclickers:
+      - trigger: "f8"        # keyboard key, or mouse button: "mouse_left", "mouse_right",
+                             # "mouse_middle", "mouse_side", "mouse_extra", "mouse_forward", "mouse_back"
+        mode: "toggle"       # toggle (default): press to start, press again to stop
+                             # hold: click while the trigger is held down
+        button: "left"       # button to click: left (default), right, or middle
+        interval: 0.05       # seconds between clicks (default 0.05 = 20 clicks/s)
+```
+
+Global autoclickers are always armed; per-app autoclickers are added while that app is focused, and an app entry with the same trigger overrides the global one.
+
+Notes:
+
+- Clicks are sent via the daemon's own virtual mouse, and are filtered out of trigger detection, so injected clicks never re-trigger an autoclicker.
+- The trigger press itself still goes through to the application, so pick a trigger that is harmless in game (same caveat as `pause_key`).
+- Clicking stops on focus loss and is suppressed while paused; keyboard auto-repeat is ignored, so holding a toggle trigger does not flap it on/off.
+- Mouse buttons used as triggers need the `mouse_` prefix because names like `left` are also keyboard keys (the arrow key).
+
+
 ## Pausing
 
 Interval presses and remaps can be toggled with a pause key, either globally or per app (per-app overrides global):
