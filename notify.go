@@ -8,6 +8,18 @@ import (
 
 var notifyConfig NotifyConfig
 
+// displayName is the human-facing app name used in notifications.
+var displayName = "Sway AHK"
+
+func displayNameFor(compositor string) string {
+	switch compositor {
+	case "hyprland":
+		return "Hyprland AHK"
+	default:
+		return "Sway AHK"
+	}
+}
+
 func notify(title, message string) {
 	if err := exec.Command("notify-send", title, message).Run(); err != nil {
 		log.Printf("notify-send failed: %v", err)
@@ -17,9 +29,9 @@ func notify(title, message string) {
 func notifyPauseState(paused bool, scope string) {
 	if notifyConfig.System {
 		if paused {
-			go notify("Sway AHK", "paused "+scope)
+			go notify(displayName, "paused "+scope)
 		} else {
-			go notify("Sway AHK", "resumed "+scope)
+			go notify(displayName, "resumed "+scope)
 		}
 	}
 	if notifyConfig.Sound != "" {

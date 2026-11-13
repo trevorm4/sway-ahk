@@ -1,15 +1,15 @@
 ## Intro
 
-When using Sway, the thing I miss the most is basic scripting when gaming to automate pressing keys.
+When using Sway or Hyprland, the thing I miss the most is basic scripting when gaming to automate pressing keys.
 
-This repo provides a relatively simple script that allows configuring keys to press in intervals using a virtual keyboard (uinput) and `swaymsg` for automation.
+This repo provides a relatively simple script that allows configuring keys to press in intervals using a virtual keyboard (uinput) and the compositor's IPC (`swaymsg` or `hyprctl`) for automation. It runs on **Sway** and **Hyprland**; the compositor is detected automatically at runtime (or forced with `-compositor sway|hyprland`).
 
 
 ## Setup
 
 Requires:
 
-- `sway`
+- `sway` (with `swaymsg`) or `hyprland` (with `hyprctl`) in `$PATH`
 - the `libinput` binary in `$PATH` for key detection (bundled in the nix-built binary)
 - write access to `/dev/uinput` for key injection — on NixOS this is granted to the active session user via ACL
 - read access to `/dev/input` events for remaps — add your user to the `input` group, e.g. in NixOS:
@@ -32,10 +32,16 @@ Refer to the `config/` directory for an example config.
 
 Key names are the Linux key codes (`KEY_*` from `input-event-codes.h`) without the `KEY_` prefix, lowercase — e.g. `q`, `f1`, `leftshift`, `kpenter`, `space`.
 
-If you need help finding the class of your window, use the following command
+If you need help finding the class of your window, use the following command on Sway
 
 ```bash
 sleep 2 && swaymsg -t get_tree | jq '.. | select(.type?) | select(.focused==true)'
+```
+
+or on Hyprland
+
+```bash
+sleep 2 && hyprctl activewindow -j | jq .class
 ```
 
 and make sure to swap to the window that you are interested in within 2 seconds (or change the sleep duration if necessary)
@@ -44,6 +50,12 @@ If you wish to bind it in your sway config, then you would do the following
 
 ```
 bindsym $mod+z exec sway-ahk -config ~/.config/sway/scripts/default.yaml
+```
+
+or in your hyprland config
+
+```
+bind = $mainMod, Z, exec, sway-ahk -config ~/.config/hypr/scripts/default.yaml
 ```
 where `sway-ahk` must be in your `$PATH`
 
@@ -147,9 +159,10 @@ nixpkgs.overlays = [
 services.sway-ahk = {
   enable = true;
   configFile = "/home/trevor/Repos/sway-ahk/config/default.yaml";
+  compositor = "hyprland"; # or "sway" (default)
 };
 ```
 
-Manage it with `systemctl --user start|stop|restart sway-ahk` (restart after config changes). The unit provides its own PATH (`swaymsg`, `pw-play`, `notify-send`), and logs still go to `/tmp/sway-ahk.log`. When running under systemd, prefer `systemctl` over the manual toggle command — the daemon writes the PID file itself, so the toggle will stop the service's daemon rather than start a second one.
+Manage it with `systemctl --user start|stop|restart sway-ahk` (restart after config changes). The unit provides its own PATH (`swaymsg` or `hyprctl` depending on `compositor`, `pw-play`, `notify-send`), and logs still go to `/tmp/sway-ahk.log`. When running under systemd, prefer `systemctl` over the manual toggle command — the daemon writes the PID file itself, so the toggle will stop the service's daemon rather than start a second one.
 
 Note: user services inherit the supplementary groups of the systemd **user manager**, which are fixed when it starts — not your login groups. If remaps don't trigger under the service after adding yourself to the `input` group, the user manager is stale: fully log out of all sessions, reboot, or `sudo systemctl restart user@1000.service` to pick up the group.

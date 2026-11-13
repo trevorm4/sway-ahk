@@ -9,15 +9,27 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/trevorm4/sway-ahk/internal/compositor"
 )
+
+var compositorName string
 
 func main() {
 	flag.StringVar(&configFilePath, "config", "sway-ahk-config.yaml", "Path to configuration file")
+	flag.StringVar(&compositorName, "compositor", "auto", "Compositor integration to use: auto, sway, or hyprland")
 	flag.Parse()
 
 	if os.Getenv(daemonFlag) == "1" {
 		runDaemon()
 		return
+	}
+
+	// Best-effort detection for the notification title; failure is only
+	// fatal when starting the daemon (stopping works without a compositor).
+	comp, detectErr := compositor.Detect(compositorName)
+	if detectErr == nil {
+		displayName = displayNameFor(comp.Name())
 	}
 
 	running, pid := getRunningPID()
@@ -26,8 +38,11 @@ func main() {
 		stopDaemon(pid)
 		return
 	}
+	if detectErr != nil {
+		log.Fatalf("Cannot start: %v", detectErr)
+	}
 
-	fmt.Println("Starting Sway AHK daemon...")
+	fmt.Printf("Starting %s daemon...\n", displayName)
 	startParent()
 }
 
@@ -46,6 +61,15 @@ func runDaemon() {
 	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
 		log.Printf("failed to write PID file: %v", err)
 	}
+
+	comp, err := compositor.Detect(compositorName)
+	if err != nil {
+		log.Printf("Compositor detection failed: %v", err)
+		os.Remove(pidFile)
+		return
+	}
+	displayName = displayNameFor(comp.Name())
+	log.Printf("using compositor: %s", comp.Name())
 
 	config, err := loadConfig()
 	if err != nil {
@@ -74,9 +98,9 @@ func runDaemon() {
 	}
 
 	focusChan := make(chan string, 10)
-	go monitorSwayFocus(focusChan)
+	go comp.MonitorFocus(focusChan)
 
-	if appClass := queryFocusedApp(); appClass != "" {
+	if appClass := comp.FocusedApp(); appClass != "" {
 		focusChan <- appClass
 	}
 

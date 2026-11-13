@@ -42,7 +42,7 @@ func stopDaemon(pid int) {
 		fmt.Printf("Error stopping process: %v\n", err)
 	}
 	os.Remove(pidFile)
-	notify("Sway AHK", "Stopped")
+	notify(displayName, "Stopped")
 }
 
 func startParent() {
@@ -51,7 +51,7 @@ func startParent() {
 		log.Fatal(err)
 	}
 
-	cmd := exec.Command(os.Args[0], "-config", absConfig)
+	cmd := exec.Command(os.Args[0], "-config", absConfig, "-compositor", compositorName)
 	cmd.Env = append(os.Environ(), daemonFlag+"=1")
 
 	// Create new session so it doesn't die with the non-daemon proc
@@ -69,6 +69,6 @@ func startParent() {
 		log.Fatalf("Failed to write PID file: %v", err)
 	}
 
-	notify("Sway AHK", "Started")
+	notify(displayName, "Started")
 	os.Exit(0)
 }

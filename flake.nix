@@ -1,5 +1,5 @@
 {
-  description = "sway-ahk: key automation for Sway";
+  description = "sway-ahk: key automation for Sway and Hyprland";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 

@@ -22,20 +22,29 @@ in
       type = lib.types.path;
       description = "Path to the sway-ahk YAML configuration file.";
     };
+
+    compositor = lib.mkOption {
+      type = lib.types.enum [
+        "sway"
+        "hyprland"
+      ];
+      default = "sway";
+      description = "Which compositor integration to use; provides the matching CLI tool (swaymsg or hyprctl) in PATH.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
     systemd.user.services.sway-ahk = {
-      description = "sway-ahk: key automation for Sway";
+      description = "sway-ahk: key automation for Sway and Hyprland";
       wantedBy = [ "graphical-session.target" ];
       partOf = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
       serviceConfig = {
-        ExecStart = "${cfg.package}/bin/sway-ahk -config ${toString cfg.configFile}";
+        ExecStart = "${cfg.package}/bin/sway-ahk -config ${toString cfg.configFile} -compositor ${cfg.compositor}";
         Environment = [
           "SWAY_AHK_DAEMON=1"
           "PATH=${lib.makeBinPath [
-            pkgs.sway
+            (if cfg.compositor == "hyprland" then pkgs.hyprland else pkgs.sway)
             pkgs.pipewire
             pkgs.libnotify
           ]}"
